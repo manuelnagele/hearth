@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: Hearth
+## Notes: The bar in everyday play: gold and today's change, bags, durability, world buffs, raid consumables and progress, mail, clock. A Deadbeat module.
+## Author: Manuel Nagele
+## Version: 0.2.0
+## SavedVariables: HearthDB
+## Dependencies: Deadbeat
+
+Core.lua
+Hearth.lua

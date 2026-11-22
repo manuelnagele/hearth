@@ -1,0 +1,12 @@
+[Unit]
+Description=Hearth — follow origin/main, relink the addon, notify on change
+After=network-online.target
+
+[Service]
+ExecStart=@REPO@/deploy/hearth-sync.sh
+Environment=HEARTH_REPO=@REPO@
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
