@@ -37,7 +37,7 @@ Copy the `Hearth` folder into `World of Warcraft/_forever_/Interface/AddOns/`. N
 
 ```
 luajit tests/run.lua     # the everyday math
-luajit tests/smoke.lua   # the whole addon on Deadbeat (needs ../deadbeat)
+luajit tests/smoke.lua   # the whole addon on Deadbeat (needs ../deadbeat and ../deadbeat-spec)
 ```
 Releases: push a tag `vX.Y.Z` matching the TOC's version; CI packages the zip onto GitHub Releases.
 `deploy/` is the author's Linux setup that keeps a game install in sync with this repo (optional).
