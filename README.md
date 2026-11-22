@@ -1,37 +1,35 @@
 # Hearth
 
-Everyday information on [Deadbeat](https://github.com/manuelnagele/deadbeat)'s bar for **WoW: Forever**: the
+Everyday items on [Deadbeat](https://github.com/manuelnagele/deadbeat)'s bar for **WoW: Forever**: the
 things you glance at between pulls, each where it matters.
 
 ## What it shows
 
-The bar adapts to where you are (Deadbeat's contexts):
+Hearth's items on the bar (each with its own tooltip; right-click for settings):
 
-| Where | On the bar |
-|---|---|
-| Open world, cities | the zone, your gold and today's change (`+18g today`) |
-| Raids | the raid, time inside, bosses killed this lockout (`5/8`); `no flask · no food` when you're missing them |
-| Dungeons | the instance and time inside |
+| Item | Shows | By default in |
+|---|---|---|
+| **Gold** | your gold, green when you're up today | world, cities |
+| **Bags** | free slots (gold at 8 or fewer, red at 3); click opens your bags | everywhere |
+| **Durability** | your most worn item (gold below 50 %, red below 25 %) | world, dungeons, farming |
+| **Raid** | bosses killed this lockout and time inside (`5/8 · 0:42`) | raids |
+| **Flask and food** | `ready`, or what's missing in red | raids |
 
-Small badges, each switchable per place on Deadbeat's Bar page:
-- **Bags:** free slots (gold at 8 or fewer, red at 3 or fewer)
-- **Durability:** your most worn item (gold below 50 %, red below 25 %)
-- **World buffs:** Onyxia/Nefarian, Rend, Zandalar, Songflower, Darkmoon, Dire Maul, with time left
-- **Mail:** an envelope when you have new mail
-- **Latency:** a dot (green, gold, red)
+On the shelf, to add in edit mode: **world buffs** (Onyxia/Nefarian, Rend, Zandalar, Songflower, Darkmoon, Dire Maul,
+with minutes left), **mail**, **latency** (a dot), **time in a dungeon**.
 
-Hover the bar for details: gold at the start of today and now, bags, the three most worn items, world buffs with exact
-times, consumables, raid lockouts with progress and reset times, mail senders, latency and FPS.
+Tooltips: gold at the start of today and now; free slots; the three most worn items; raid lockouts with their resets;
+flask and food; each world buff with its time; mail senders; latency and frame rate.
 
 ## Settings
 
-The gear on Deadbeat's bar → **Hearth**: the gold line in the world and cities, the raid line. Which badges show where:
-Deadbeat's Bar page. `/hearth` opens the page.
+Arrange Hearth's items in Deadbeat's edit mode (right-click the gear); which places each shows in: Deadbeat's Bar
+page. `/hearth` opens Hearth's page.
 
 ## Install
 
 Copy the `Hearth` folder into `World of Warcraft/_forever_/Interface/AddOns/`. Needs
-[Deadbeat](https://github.com/manuelnagele/deadbeat).
+[Deadbeat](https://github.com/manuelnagele/deadbeat) 2.0 or later.
 
 ## Development
 

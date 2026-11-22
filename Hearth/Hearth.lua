@@ -1,21 +1,15 @@
--- Hearth: the bar in everyday play. Gold and today's change, bags, durability, world buffs, raid consumables, raid
--- progress, mail, the clock and latency, each where it fits (Deadbeat's contexts), details in the tooltip.
--- A Deadbeat module (spec 0.1).
+-- Hearth: everyday items on Deadbeat's bar. Gold and today's change, bags, durability, the raid you're in, flask and
+-- food; on the shelf world buffs, mail, latency and time in a dungeon. Each where it fits (Deadbeat's contexts),
+-- details in its tooltip. A Deadbeat module (spec 2.0).
 local ADDON, ns = ...
 local Core = ns.Core
-local VERSION = "0.2.0"
+local VERSION = "1.0.0"
 
 local db, char
 local m, K, P
-local badges = {}
 local entered = {}                   -- instance name -> when you came in (this session)
 
 local function secret(v) return issecretvalue ~= nil and issecretvalue(v) end
-local function colour(level)
-    if level == "bad" then return K.RED end
-    if level == "low" then return P.goldOn end
-    return { 0.92, 0.88, 0.80 }
-end
 
 -- --- reading the game -------------------------------------------------------------------------
 
@@ -80,58 +74,51 @@ local function progress(name)
     end
 end
 
--- --- the badges -----------------------------------------------------------------------------------
+-- --- the items (spec 2.0): at most three showing in any place ---------------------------------------------
+--   world / city: gold, bags, durability (world) · raid: raid, consumables, bags · dungeon: bags, durability
+--   on the shelf: world buffs, mail, latency, time in a dungeon
 
--- a badge: an icon and a text; the width follows the text
-local function badge(id, label, contexts, iconPath)
-    local b = m:Badge(40, { id = id, label = label, contexts = contexts })
-    if iconPath then
-        b.icon = b:CreateTexture(nil, "ARTWORK")
-        b.icon:SetSize(13, 13)
-        b.icon:SetPoint("LEFT")
-        b.icon:SetTexture(iconPath)
-        b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    end
-    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    b.text:SetPoint("LEFT", iconPath and 16 or 0, 0)
-    function b.set(text, c)
-        b.text:SetText(text)
-        if c then b.text:SetTextColor(c[1], c[2], c[3]) end
-        b:SetWidth((iconPath and 16 or 0) + (b.text:GetStringWidth() or 20))
-    end
-    badges[id] = b
-    return b
-end
-
+local items = {}
 local ALL = { farm = true, raid = true, dungeon = true, city = true, world = true }
+local LEVEL = { ok = "normal", low = "warn", bad = "bad" }
 
-local function buildBadges()
-    -- created right to left: the latency pip sits next to the gear. No clock: the minimap has one (user, 2026-11-22).
-    local clock = badge("hearth.clock", "Latency", ALL)
-    clock.pip = clock:CreateTexture(nil, "ARTWORK")
-    clock.pip:SetSize(6, 6)
-    clock.pip:SetTexture("Interface\\Buttons\\WHITE8x8")
-    clock.pip:SetPoint("LEFT", 1, 0)
-    function clock.set() clock:SetWidth(8) end
-    badge("hearth.mail", "New mail", { city = true, world = true }, "Interface\\Icons\\INV_Letter_15")
-    badge("hearth.durability", "Durability", { raid = true, dungeon = true, world = true, farm = true },
-        "Interface\\Icons\\Trade_BlackSmithing")
-    badge("hearth.bags", "Free bag slots", ALL, "Interface\\Icons\\INV_Misc_Bag_08")
-    badge("hearth.consumables", "Raid consumables", { raid = true })
-    local buffs = m:Badge(20, { id = "hearth.buffs", label = "World buffs", contexts = { raid = true, city = true, world = true } })
-    buffs.slots = {}
+local function buildItems()
+    local I = "Interface\\Icons\\"
+    items.gold = m:Item("gold", { name = "Gold", icon = I .. "INV_Misc_Coin_01", contexts = { city = true, world = true } })
+    items.bags = m:Item("bags", { name = "Bags", icon = I .. "INV_Misc_Bag_08", contexts = ALL })
+    items.durability = m:Item("durability", { name = "Durability", icon = I .. "Trade_BlackSmithing",
+        contexts = { dungeon = true, world = true, farm = true } })
+    items.raid = m:Item("raid", { name = "Raid", icon = I .. "INV_Misc_Head_Dragon_01", contexts = { raid = true } })
+    items.consumables = m:Item("consumables", { name = "Flask and food", icon = I .. "INV_Potion_41",
+        contexts = { raid = true } })
+    items.dungeon = m:Item("dungeon", { name = "Time inside", icon = I .. "INV_Misc_PocketWatch_02",
+        default = false, contexts = { dungeon = true } })
+    items.mail = m:Item("mail", { name = "Mail", icon = I .. "INV_Letter_15", default = false,
+        contexts = { city = true, world = true } })
+    -- world buffs: a widget of up to five small icons with minutes left
+    local canvas, item = m:Widget("buffs", { name = "World buffs", width = 20, default = false,
+        contexts = { raid = true, city = true, world = true } })
+    items.buffs, items.buffsCanvas = item, canvas
+    canvas.slots = {}
     for i = 1, 5 do
-        local s = CreateFrame("Frame", nil, buffs)
-        s:SetSize(36, 14)
-        s.icon = s:CreateTexture(nil, "ARTWORK")
-        s.icon:SetSize(13, 13)
-        s.icon:SetPoint("LEFT")
-        s.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        s.text = s:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        s.text:SetPoint("LEFT", 15, 0)
-        buffs.slots[i] = s
+        local sl = CreateFrame("Frame", nil, canvas)
+        sl:SetSize(36, 14)
+        sl.icon = sl:CreateTexture(nil, "ARTWORK")
+        sl.icon:SetSize(13, 13)
+        sl.icon:SetPoint("LEFT")
+        sl.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        sl.text = sl:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        sl.text:SetPoint("LEFT", 15, 0)
+        canvas.slots[i] = sl
     end
-    badges["hearth.buffs"] = buffs
+    -- latency: a widget with one dot
+    local lc, li = m:Widget("latency", { name = "Latency", width = 8, default = false, contexts = ALL })
+    items.latency = li
+    lc.pip = lc:CreateTexture(nil, "ARTWORK")
+    lc.pip:SetSize(6, 6)
+    lc.pip:SetTexture("Interface\\Buttons\\WHITE8x8")
+    lc.pip:SetPoint("LEFT", 1, 0)
+    items.latencyCanvas = lc
 end
 
 -- --- drawing ---------------------------------------------------------------------------------------
@@ -140,127 +127,128 @@ local state = {}
 
 local function draw()
     if not m then return end
-    local ctx = Deadbeat.Context and Deadbeat.Context() or "world"
-    -- clock + latency
+    -- latency
     local _, _, home, world = GetNetStats()
     local lat = math.max(home or 0, world or 0)
-    local c = badges["hearth.clock"]
-    c.pip:SetVertexColor(unpack(lat < 120 and K.GREEN or (lat < 300 and P.goldOn or K.RED)))
-    c.set()
+    items.latencyCanvas.pip:SetVertexColor(unpack(lat < 120 and K.GREEN or (lat < 300 and P.goldOn or K.RED)))
     state.latency, state.home, state.world = lat, home, world
     -- mail
-    local mail = badges["hearth.mail"]
-    if HasNewMail and HasNewMail() then mail.set("", nil) mail:SetWidth(14) mail:Show() else mail:Hide() end
+    if HasNewMail and HasNewMail() then items.mail:Set("new") items.mail:Show() else items.mail:Hide() end
     -- bags
     local free, total = freeSlots()
     state.free, state.total = free, total
-    badges["hearth.bags"].set(tostring(free), colour(Core.level(free, 8, 3)))
+    items.bags:Set(tostring(free), LEVEL[Core.level(free, 8, 3)])
     -- durability
     local low, worst = Core.durability(gear())
     state.worst = worst
-    local d = badges["hearth.durability"]
     if low then
-        d.set(("%d%%"):format(low * 100 + 0.5), colour(Core.level(low * 100, 50, 25)))
-        d:Show()
+        items.durability:Set(("%d%%"):format(low * 100 + 0.5), LEVEL[Core.level(low * 100, 50, 25)])
+        items.durability:Show()
     else
-        d:Hide()
+        items.durability:Hide()
     end
     -- world buffs + consumables
-    local list = auras()
-    local wb, flask, food = Core.scan(list)
+    local wb, flask, food = Core.scan(auras())
     state.wb, state.flask, state.food = wb, flask, food
-    local buffs = badges["hearth.buffs"]
+    local canvas = items.buffsCanvas
     local x = 0
-    for i, s in ipairs(buffs.slots) do
+    for i, sl in ipairs(canvas.slots) do
         local a = wb[i]
         if a then
-            s.icon:SetTexture(a.icon)
-            s.text:SetText(a.left and Core.short(a.left) or "")
-            s.text:SetTextColor(unpack((a.left or 9999) < 600 and P.goldOn or P.warmGrey))
-            s:SetWidth(15 + (s.text:GetStringWidth() or 18))
-            s:ClearAllPoints()
-            s:SetPoint("LEFT", buffs, "LEFT", x, 0)
-            x = x + s:GetWidth() + 6
-            s:Show()
+            sl.icon:SetTexture(a.icon)
+            sl.text:SetText(a.left and Core.short(a.left) or "")
+            sl.text:SetTextColor(unpack((a.left or 9999) < 600 and P.goldOn or P.warmGrey))
+            sl:SetWidth(15 + (sl.text:GetStringWidth() or 18))
+            sl:ClearAllPoints()
+            sl:SetPoint("LEFT", canvas, "LEFT", x, 0)
+            x = x + sl:GetWidth() + 6
+            sl:Show()
         else
-            s:Hide()
+            sl:Hide()
         end
     end
-    buffs:SetWidth(math.max(1, x - 6))
-    buffs:SetShown(#wb > 0)
+    canvas:SetWidth(math.max(1, x - 6))
+    canvas:SetShown(#wb > 0)
     local miss = Core.missing(flask, food)
-    local cons = badges["hearth.consumables"]
-    if #miss > 0 then cons.set("no " .. table.concat(miss, " · no "), K.RED) cons:Show() else cons:Hide() end
-    -- the label and numbers
+    if #miss > 0 then items.consumables:Set("no " .. table.concat(miss, " · "), "bad")
+    else items.consumables:Set("ready", "good") end
+    -- the instance you're in
     local name, kind = instance()
     if name then entered[name] = entered[name] or time() end
     for k in pairs(entered) do if k ~= name then entered[k] = nil end end
-    if kind == "raid" and db.raidLine ~= false then
+    if kind == "raid" then
         local killed, all = progress(name)
-        m:Set("label", name, 25)
-        m:Set("clock", K.clock(time() - entered[name]), 25)
-        if killed and all then m:Set("primary", ("%d/%d"):format(killed, all), 25) else m:Clear("primary") end
-        m:Set("secondary", "", 25)
-    elseif kind == "party" then
-        m:Set("label", name, 15)
-        m:Set("clock", K.clock(time() - entered[name]), 15)
-        m:Clear("primary") m:Clear("secondary")
-    elseif db.goldLine ~= false and (ctx == "city" or ctx == "world") then
-        local money = GetMoney()
-        local change
-        char.days, change = Core.today(char.days, date("%Y-%m-%d"), money)
-        state.change, state.start = change, money - change
-        m:Set("label", GetZoneText() or "", 12)
-        m:Set("clock", "", 12)                           -- over Haul's session clock
-        m:Set("primary", K.coins(money, 12, true), 12)
-        local sign = change >= 0 and ("|cff" .. K.hex(K.GREEN) .. "+") or ("|cff" .. K.hex(K.RED) .. "−")
-        m:Set("secondary", change ~= 0 and (sign .. "|r" .. K.coins(math.abs(change), 10, true) .. " today") or "", 12)
+        items.raid:Set((killed and all) and ("%d/%d · %s"):format(killed, all, K.clock(time() - entered[name]))
+            or K.clock(time() - entered[name]))
+        items.raid:Show()
     else
-        for _, f in ipairs({ "label", "clock", "primary", "secondary" }) do m:Clear(f) end
+        items.raid:Hide()
     end
+    if kind == "party" then items.dungeon:Set(K.clock(time() - entered[name])) items.dungeon:Show()
+    else items.dungeon:Hide() end
+    -- gold and today's change
+    local money = GetMoney()
+    local change
+    char.days, change = Core.today(char.days, date("%Y-%m-%d"), money)
+    state.change, state.start = change, money - change
+    items.gold:Set(K.coins(money, 11, true), change > 0 and "good" or "normal")
     Deadbeat.Refresh()
 end
 
--- --- tooltip ---------------------------------------------------------------------------------------------
+-- --- tooltips: one per item --------------------------------------------------------------------------------
 
-local function section(tip)
-    local g, w = P.warmGrey, { 1, 1, 1 }
-    tip:AddLine("Everyday", P.bronze4[1], P.bronze4[2], P.bronze4[3])
-    if state.start then
-        tip:AddDoubleLine("  Gold today", ("%s → %s"):format(K.coins(state.start, 11, true), K.coins(GetMoney(), 11, true)),
-            g[1], g[2], g[3], 1, 1, 1)
+local function line(tip, left, right)
+    local g = P.warmGrey
+    tip:AddDoubleLine("  " .. left, right, g[1], g[2], g[3], 1, 1, 1)
+end
+
+local TIPS = {}
+
+function TIPS.gold(tip)
+    if not state.start then return end
+    line(tip, "Start of today", K.coins(state.start, 11, true))
+    line(tip, "Now", K.coins(GetMoney(), 11, true))
+    local sign = state.change >= 0 and ("|cff" .. K.hex(K.GREEN) .. "+") or ("|cff" .. K.hex(K.RED) .. "−")
+    line(tip, "Today", sign .. "|r" .. K.coins(math.abs(state.change), 11, true))
+end
+
+function TIPS.bags(tip) line(tip, "Free", ("%d of %d"):format(state.free or 0, state.total or 0)) end
+
+function TIPS.durability(tip)
+    for _, it in ipairs(state.worst or {}) do line(tip, it.link or "?", ("%d%%"):format(it.share * 100 + 0.5)) end
+end
+
+function TIPS.raid(tip)
+    if not (GetNumSavedInstances and GetNumSavedInstances() > 0) then return end
+    for i = 1, GetNumSavedInstances() do
+        local n, _, reset, _, locked, _, _, isRaid, _, _, total, killed = GetSavedInstanceInfo(i)
+        if locked and isRaid then line(tip, ("%s %d/%d"):format(n, killed or 0, total or 0), "resets in " .. Core.until_(reset)) end
     end
-    tip:AddDoubleLine("  Bags", ("%d free of %d"):format(state.free or 0, state.total or 0), g[1], g[2], g[3], 1, 1, 1)
-    for i, it in ipairs(state.worst or {}) do
-        tip:AddDoubleLine(i == 1 and "  Durability" or " ", ("%s  %d%%"):format(it.link or "?", it.share * 100 + 0.5),
-            g[1], g[2], g[3], 1, 1, 1)
-    end
-    for i, a in ipairs(state.wb or {}) do
-        tip:AddDoubleLine(i == 1 and "  World buffs" or " ", ("%s  %s"):format(Core.WORLD[a.id] or a.name,
-            a.left and K.clock(a.left) or ""), g[1], g[2], g[3], 1, 1, 1)
-    end
-    if select(2, instance()) == "raid" then
-        local miss = Core.missing(state.flask, state.food)
-        tip:AddDoubleLine("  Consumables", #miss == 0 and "flask and food" or ("|cff" .. K.hex(K.RED) .. "no " ..
-            table.concat(miss, ", no ") .. "|r"), g[1], g[2], g[3], 1, 1, 1)
-    end
-    if GetNumSavedInstances and GetNumSavedInstances() > 0 then
-        for i = 1, GetNumSavedInstances() do
-            local n, _, reset, _, locked, _, _, isRaid, _, _, total, killed = GetSavedInstanceInfo(i)
-            if locked and isRaid then
-                tip:AddDoubleLine(("  %s %d/%d"):format(n, killed or 0, total or 0), "resets in " .. Core.until_(reset),
-                    g[1], g[2], g[3], w[1], w[2], w[3])
-            end
-        end
-    end
-    if HasNewMail and HasNewMail() and GetLatestThreeSenders then
+end
+
+function TIPS.consumables(tip)
+    line(tip, "Flask or elixir", state.flask and "yes" or ("|cff" .. K.hex(K.RED) .. "missing|r"))
+    line(tip, "Food buff", state.food and "yes" or ("|cff" .. K.hex(K.RED) .. "missing|r"))
+end
+
+function TIPS.buffs(tip)
+    for _, a in ipairs(state.wb or {}) do line(tip, Core.WORLD[a.id] or a.name, a.left and K.clock(a.left) or "") end
+end
+
+function TIPS.mail(tip)
+    if GetLatestThreeSenders then
         local a, b, c = GetLatestThreeSenders()
         local who = table.concat({ a, b, c }, ", ")
-        tip:AddDoubleLine("  Mail", who ~= "" and who or "new mail", g[1], g[2], g[3], 1, 1, 1)
+        if who ~= "" then line(tip, "From", who) end
     end
-    tip:AddDoubleLine("  Latency · FPS", ("%d / %d ms  ·  %d fps"):format(state.home or 0, state.world or 0,
-        GetFramerate and GetFramerate() or 0), g[1], g[2], g[3], 1, 1, 1)
 end
+
+function TIPS.latency(tip, shift)
+    line(tip, "Home · world", ("%d · %d ms"):format(state.home or 0, state.world or 0))
+    line(tip, "Frame rate", ("%d fps"):format(GetFramerate and GetFramerate() or 0))
+end
+
+TIPS.dungeon = function(tip) line(tip, "Time inside", items.dungeon.value) end
 
 -- --- events ----------------------------------------------------------------------------------------------
 
@@ -275,25 +263,22 @@ function handlers.ADDON_LOADED(name)
 end
 
 function handlers.PLAYER_LOGIN()
-    if not Deadbeat then return end
+    if not (Deadbeat and Deadbeat.SPEC and Deadbeat.SPEC >= "2.0") then return end
     local guid = UnitGUID("player")
     db.chars[guid] = db.chars[guid] or {}
     char = db.chars[guid]
     K, P = Deadbeat.kit, Deadbeat.kit.P
-    m = Deadbeat.Register("Hearth", 60, { spec = "0.1" })
-    buildBadges()
-    m:Section(section)
+    m = Deadbeat.Register("Hearth", { icon = "Interface\\Icons\\INV_Misc_Rune_01", spec = "2.0" })
+    buildItems()
+    m:Tooltip(function(tip, item, shift) local t = TIPS[item.id] if t then t(tip, shift) end end)
+    m:Click(function(item)
+        if item.id == "bags" and ToggleAllBags then ToggleAllBags() end
+    end, function(item) return item.id == "bags" and "open your bags" or nil end)
     m:OnContext(draw)
-    if m.Options then
-        m:Options({ title = "Hearth", icon = "Interface\\Icons\\INV_Misc_Rune_01", rows = {
-            { kind = "header", label = "Everyday" },
-            { kind = "toggle", label = "Zone, gold and today's change in the open world and in cities",
-              get = function() return db.goldLine ~= false end, set = function(on) db.goldLine = on draw() end },
-            { kind = "toggle", label = "In a raid: raid, time inside, bosses killed",
-              get = function() return db.raidLine ~= false end, set = function(on) db.raidLine = on draw() end },
-            { kind = "note", label = "Which badges show where (bags, durability, world buffs, consumables, mail, clock): the Bar page." },
-        } })
-    end
+    m:Options({ title = "Hearth", icon = "Interface\\Icons\\INV_Misc_Rune_01", rows = {
+        { kind = "header", label = "Everyday" },
+        { kind = "note", label = "Hearth's items: gold, bags, durability, the raid you're in, flask and food; on the shelf: world buffs, mail, latency, time in a dungeon. Arrange them in edit mode (right-click the gear); which places each shows in: the Bar page." },
+    } })
     if RequestRaidInfo then RequestRaidInfo() end
     C_Timer.NewTicker(1, draw)
     draw()
